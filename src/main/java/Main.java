@@ -36,7 +36,7 @@ public class Main {
                     new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
         }
 
-        private static final String HTTP_200_OK = "HTTP/1.1 200 OK\r\n\r\n";
+        private static final String HTTP_200_OK = "HTTP/1.1 200 OK\r\n";
         private static final String HTTP_404_NOT_FOUND = "HTTP/1.1 404 Not Found\r\n\r\n";
 
         @Override
@@ -62,7 +62,7 @@ public class Main {
                 final var requestType = tokens[0].trim();
                 if (requestType.equals("GET")) {
                     final var path = tokens[1];
-                    if (path.equals("/")) writeResponse(HTTP_200_OK);
+                    if (path.equals("/")) writeResponse(HTTP_200_OK + "\r\n");
                     else if (path.startsWith("/echo/")) {
                         final var content = path.substring("/echo/".length());
                         writeResponse(HTTP_200_OK);
