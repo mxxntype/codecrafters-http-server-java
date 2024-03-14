@@ -25,6 +25,7 @@ public class Main {
             BufferedWriter writer =
                     new BufferedWriter(new OutputStreamWriter(client.getOutputStream()));
             writer.write("HTTP/1.1 200 OK\r\n\r\n");
+            writer.flush();
             System.err.println("Wrote HTTP OK response (200)");
 
             // Stop the server.
