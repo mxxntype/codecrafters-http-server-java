@@ -30,6 +30,9 @@ public class Main {
             this.clientSocket = clientSocket;
         }
 
+        private static final String HTTP_200_OK = "HTTP/1.1 200 OK\r\n\r\n";
+        private static final String HTTP_404_NOT_FOUND = "HTTP/1.1 404 Not Found\r\n\r\n";
+
         @Override
         public void run() {
             try {
@@ -54,10 +57,18 @@ public class Main {
                 final var requestType = tokens[0].trim();
                 if (requestType.equals("GET")) {
                     final var path = tokens[1];
-                    if (path.equals("/")) writeResponse(clientSocket, "HTTP/1.1 200 OK\r\n\r\n");
-                    else {
+                    if (path.equals("/")) writeResponse(clientSocket, HTTP_200_OK);
+                    else if (path.startsWith("/echo/")) {
+                        final var content = path.substring("/echo/".length());
+                        writeResponse(clientSocket, HTTP_200_OK);
+                        writeResponse(clientSocket, "Content-Type: text/plain\r\n");
+                        writeResponse(clientSocket, "Content-Length: " + content.length() + "\r\n");
+                        writeResponse(clientSocket, "\r\n");
+                        writeResponse(clientSocket, content);
+                        log(LogLevel.INFO, "Echoed \"" + content + "\"");
+                    } else {
                         log(LogLevel.WARN, "Path " + path + " is invalid");
-                        writeResponse(clientSocket, "HTTP/1.1 404 Not Found\r\n\r\n");
+                        writeResponse(clientSocket, HTTP_404_NOT_FOUND);
                     }
                 }
             }
