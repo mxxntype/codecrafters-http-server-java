@@ -17,7 +17,7 @@
             devShells.default = with pkgs; mkShell {
                 JDTLS_PATH = "${jdt-language-server}/share/java";
                 packages = [
-                    gradle
+                    maven
                     jdk
                     jdt-language-server
                 ];
