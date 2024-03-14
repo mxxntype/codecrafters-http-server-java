@@ -25,9 +25,15 @@ public class Main {
 
     private static class ClientHandler extends Thread {
         private final Socket clientSocket;
+        private final BufferedWriter outputStream;
+        private final BufferedReader inputStream;
 
-        public ClientHandler(final Socket clientSocket) {
+        public ClientHandler(final Socket clientSocket) throws IOException {
             this.clientSocket = clientSocket;
+            this.outputStream =
+                    new BufferedWriter(new OutputStreamWriter(clientSocket.getOutputStream()));
+            this.inputStream =
+                    new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
         }
 
         private static final String HTTP_200_OK = "HTTP/1.1 200 OK\r\n\r\n";
@@ -36,7 +42,8 @@ public class Main {
         @Override
         public void run() {
             try {
-                handleClient(this.clientSocket);
+                handleClient();
+                this.outputStream.flush();
                 this.clientSocket.close();
             } catch (final IOException e) {
                 log(LogLevel.ERROR, "Error handling client: " + e.getMessage());
@@ -47,28 +54,26 @@ public class Main {
          * @param clientSocket
          * @throws IOException
          */
-        private static void handleClient(final Socket clientSocket) throws IOException {
-            final var reader =
-                    new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+        private void handleClient() throws IOException {
             String request = null;
-            while ((request = reader.readLine()) != null && !request.isBlank()) {
+            while ((request = this.inputStream.readLine()) != null && !request.isBlank()) {
                 log(LogLevel.DEBUG, "Read: " + request);
                 final var tokens = request.split(" ");
                 final var requestType = tokens[0].trim();
                 if (requestType.equals("GET")) {
                     final var path = tokens[1];
-                    if (path.equals("/")) writeResponse(clientSocket, HTTP_200_OK);
+                    if (path.equals("/")) writeResponse(HTTP_200_OK);
                     else if (path.startsWith("/echo/")) {
                         final var content = path.substring("/echo/".length());
-                        writeResponse(clientSocket, HTTP_200_OK);
-                        writeResponse(clientSocket, "Content-Type: text/plain\r\n");
-                        writeResponse(clientSocket, "Content-Length: " + content.length() + "\r\n");
-                        writeResponse(clientSocket, "\r\n");
-                        writeResponse(clientSocket, content);
+                        writeResponse(HTTP_200_OK);
+                        writeResponse("Content-Type: text/plain\r\n");
+                        writeResponse("Content-Length: " + content.length() + "\r\n");
+                        writeResponse("\r\n");
+                        writeResponse(content);
                         log(LogLevel.INFO, "Echoed \"" + content + "\"");
                     } else {
                         log(LogLevel.WARN, "Path " + path + " is invalid");
-                        writeResponse(clientSocket, HTTP_404_NOT_FOUND);
+                        writeResponse(HTTP_404_NOT_FOUND);
                     }
                 }
             }
@@ -79,12 +84,8 @@ public class Main {
          * @param response
          * @throws IOException
          */
-        private static void writeResponse(final Socket clientSocket, final String response)
-                throws IOException {
-            final var writer =
-                    new BufferedWriter(new OutputStreamWriter(clientSocket.getOutputStream()));
-            writer.write(response);
-            writer.flush();
+        private void writeResponse(final String response) throws IOException {
+            this.outputStream.write(response);
             log(LogLevel.DEBUG, "Wrote: " + response.trim());
         }
     }
