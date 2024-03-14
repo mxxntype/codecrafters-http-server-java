@@ -19,43 +19,111 @@ public class Main {
 
     public static void main(final String[] args) {
         try {
-            // Start a server.
             final ServerSocket server = new ServerSocket(4221);
             server.setReuseAddress(true);
-            final Socket client = server.accept();
-            System.err.println(ANSI_CYAN + "[NEW CONNECTION]: " + ANSI_RESET + client.getPort());
+            log(LogLevel.INFO, "Server started on port " + server.getLocalPort());
 
-            readRequest(client);
-            respondToClient(client);
-
-            server.close();
+            while (true) {
+                final Socket client = server.accept();
+                log(LogLevel.INFO, "New connection on port " + client.getPort());
+                new ClientHandler(client).start();
+            }
         } catch (final IOException e) {
-            System.err.println(ANSI_RED + "[EXCEPTION]: " + ANSI_RESET + e.getMessage());
+            log(LogLevel.ERROR, e.getMessage());
         }
     }
 
-    /**
-     * @param client
-     * @throws IOException
-     */
-    private static void readRequest(final Socket client) throws IOException {
-        final BufferedReader reader =
-                new BufferedReader(new InputStreamReader(client.getInputStream()));
-        String request = null;
-        while ((request = reader.readLine()) != null && !request.isBlank()) {
-            System.err.println(ANSI_PURPLE + "[INPUT]: " + ANSI_RESET + request);
+    private static class ClientHandler extends Thread {
+        private final Socket client;
+
+        public ClientHandler(Socket client) {
+            this.client = client;
+        }
+
+        @Override
+        public void run() {
+            try {
+                handleClient(client);
+            } catch (IOException e) {
+                log(LogLevel.ERROR, "Error handling client: " + e.getMessage());
+            } finally {
+                try {
+                    client.close();
+                } catch (IOException e) {
+                    log(LogLevel.ERROR, "Error closing client connection: " + e.getMessage());
+                }
+            }
+        }
+
+        /**
+         * @param client
+         * @throws IOException
+         */
+        private static void handleClient(final Socket client) throws IOException {
+            final BufferedReader reader =
+                    new BufferedReader(new InputStreamReader(client.getInputStream()));
+            String request = null;
+            while ((request = reader.readLine()) != null && !request.isBlank()) {
+                log(LogLevel.DEBUG, "Read: " + request);
+                final String[] tokens = request.split(" ");
+                final String requestType = tokens[0].trim();
+                if (requestType.equals("GET")) {
+                    String path = tokens[1];
+                    if (path.equals("/")) {
+                        writeResponse(client, "HTTP/1.1 200 OK\r\n\r\n");
+                    } else {
+                        log(LogLevel.WARN, "Path " + path + " is invalid");
+                        writeResponse(client, "HTTP/1.1 404 Not Found\r\n\r\n");
+                    }
+                }
+            }
+        }
+
+        /**
+         * @param client
+         * @param response
+         * @throws IOException
+         */
+        private static void writeResponse(final Socket client, String response) throws IOException {
+            final BufferedWriter writer =
+                    new BufferedWriter(new OutputStreamWriter(client.getOutputStream()));
+            writer.write(response);
+            writer.flush();
+            log(LogLevel.DEBUG, "Wrote: " + response.trim());
         }
     }
 
+    private enum LogLevel {
+        TRACE,
+        DEBUG,
+        INFO,
+        WARN,
+        ERROR,
+    }
+
     /**
-     * @param client
-     * @throws IOException
+     * @param logLevel
+     * @param message
      */
-    private static void respondToClient(final Socket client) throws IOException {
-        final BufferedWriter writer =
-                new BufferedWriter(new OutputStreamWriter(client.getOutputStream()));
-        writer.write("HTTP/1.1 200 OK\r\n\r\n");
-        writer.flush();
-        System.err.println(ANSI_CYAN + "[RESPONSE]: " + ANSI_RESET + "200 OK");
+    private static void log(final LogLevel logLevel, final String message) {
+        String ansiPrefix = null;
+        switch (logLevel) {
+            case TRACE:
+                ansiPrefix = ANSI_BLUE + "[TRACE] ";
+                break;
+            case DEBUG:
+                ansiPrefix = ANSI_CYAN + "[DEBUG] ";
+                break;
+            case INFO:
+                ansiPrefix = ANSI_GREEN + "[INFO] ";
+                break;
+            case WARN:
+                ansiPrefix = ANSI_YELLOW + "[WARN] ";
+                break;
+            case ERROR:
+                ansiPrefix = ANSI_RED + "[ERROR] ";
+                break;
+        }
+        System.err.println(ansiPrefix + ANSI_RESET + message);
     }
 }
