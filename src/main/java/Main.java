@@ -11,11 +11,11 @@ public class Main {
         try {
             final var server = new ServerSocket(4221);
             server.setReuseAddress(true);
-            log(LogLevel.INFO, "Server started on port " + server.getLocalPort());
+            log(LogLevel.INFO, "HTTP server is listening on port " + server.getLocalPort());
 
             while (true) {
                 final var client = server.accept();
-                log(LogLevel.INFO, "New connection on port " + client.getPort());
+                log(LogLevel.INFO, "Accepted connection from port " + client.getPort());
                 new ClientHandler(client).start();
             }
         } catch (final IOException e) {
@@ -24,16 +24,14 @@ public class Main {
     }
 
     private static class ClientHandler extends Thread {
-        private final Socket clientSocket;
-        private final BufferedWriter outputStream;
-        private final BufferedReader inputStream;
+        private final Socket socket;
+        private final BufferedWriter output;
+        private final BufferedReader input;
 
-        public ClientHandler(final Socket clientSocket) throws IOException {
-            this.clientSocket = clientSocket;
-            this.outputStream =
-                    new BufferedWriter(new OutputStreamWriter(clientSocket.getOutputStream()));
-            this.inputStream =
-                    new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+        public ClientHandler(final Socket socket) throws IOException {
+            this.socket = socket;
+            this.output = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+            this.input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         }
 
         private static final String HTTP_200_OK = "HTTP/1.1 200 OK\r\n";
@@ -43,50 +41,41 @@ public class Main {
         public void run() {
             try {
                 handleClient();
-                this.outputStream.flush();
-                this.clientSocket.close();
+                this.output.flush();
+                this.socket.close();
             } catch (final IOException e) {
                 log(LogLevel.ERROR, "Error handling client: " + e.getMessage());
             }
         }
 
         /**
-         * @param clientSocket
+         * @param socket
          * @throws IOException
          */
         private void handleClient() throws IOException {
             String request = null;
-            while ((request = this.inputStream.readLine()) != null && !request.isBlank()) {
+            while ((request = this.input.readLine()) != null && !request.isBlank()) {
                 log(LogLevel.DEBUG, "Read: " + request);
                 final var tokens = request.split(" ");
                 final var requestType = tokens[0].trim();
                 if (requestType.equals("GET")) {
                     final var path = tokens[1];
-                    if (path.equals("/")) writeResponse(HTTP_200_OK + "\r\n");
-                    else if (path.startsWith("/echo/")) {
+                    if (path.equals("/")) {
+                        this.output.write(HTTP_200_OK + "\r\n");
+                    } else if (path.startsWith("/echo/")) {
                         final var content = path.substring("/echo/".length());
-                        writeResponse(HTTP_200_OK);
-                        writeResponse("Content-Type: text/plain\r\n");
-                        writeResponse("Content-Length: " + content.length() + "\r\n");
-                        writeResponse("\r\n");
-                        writeResponse(content);
-                        log(LogLevel.INFO, "Echoed \"" + content + "\"");
+                        this.output.write(HTTP_200_OK);
+                        this.output.write("Content-Type: text/plain\r\n");
+                        this.output.write("Content-Length: " + content.length() + "\r\n");
+                        this.output.write("\r\n");
+                        this.output.write(content);
+                        log(LogLevel.INFO, "Echoed: " + content);
                     } else {
                         log(LogLevel.WARN, "Path " + path + " is invalid");
-                        writeResponse(HTTP_404_NOT_FOUND);
+                        this.output.write(HTTP_404_NOT_FOUND);
                     }
                 }
             }
-        }
-
-        /**
-         * @param clientSocket
-         * @param response
-         * @throws IOException
-         */
-        private void writeResponse(final String response) throws IOException {
-            this.outputStream.write(response);
-            log(LogLevel.DEBUG, "Wrote: " + response.trim());
         }
     }
 
